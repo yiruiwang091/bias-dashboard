@@ -1,4 +1,5 @@
 import streamlit as st
+from src.llm import get_response
 
 st.set_page_config(page_title="Bias Dashboard Demo", layout="wide")
 
@@ -25,16 +26,9 @@ if user_input:
     with st.chat_message("user"):
         st.write(user_input)
 
-    demo_reply = f"""
-Profile used:
-- Gender: {gender}
-- SES: {ses}
-- Education: {education}
+    reply = get_response(user_input, gender, ses, education)
 
-This is a placeholder response for:
-"{user_input}"
-"""
-    st.session_state.messages.append({"role": "assistant", "content": demo_reply})
+    st.session_state.messages.append({"role": "assistant", "content": reply})
 
     with st.chat_message("assistant"):
-        st.write(demo_reply)
+        st.write(reply)
