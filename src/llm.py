@@ -1,30 +1,54 @@
-import streamlit as st
+from typing import Dict, Any
+
 from openai import OpenAI
 
-client = OpenAI(
-    api_key=st.secrets["TOGETHER_API_KEY"],
-    base_url="https://api.together.xyz/v1",
-)
+from control_logic import effective_profile_summary
 
-def get_response(user_message: str, gender: str, ses: str, education: str) -> str:
+MODEL_NAME = "openai/gpt-oss-20b"
+
+
+def build_client(api_key: str, base_url: str = "https://api.together.xyz/v1") -> OpenAI:
+    return OpenAI(api_key=api_key, base_url=base_url)
+
+
+def get_response(
+    client: OpenAI,
+    user_message: str,
+    effective_profile: Dict[str, Any],
+    full_chat_history: list[dict[str, str]] | None = None,
+) -> str:
+    """
+    Use the effective profile (inferred + pinned overrides) when generating
+    the assistant's answer.
+    """
+    history_text = ""
+    if full_chat_history:
+        history_text = "\n".join(
+            f"{msg['role'].upper()}: {msg['content']}" for msg in full_chat_history[-10:]
+        )
+
     system_prompt = f"""
-You are a helpful chatbot.
+You are a helpful chatbot in a teaching demo about inferred user models.
 
-Assumed user profile:
-- Gender: {gender}
-- Socioeconomic status: {ses}
-- Education: {education}
+Use the following EFFECTIVE USER PROFILE as a soft conditioning signal:
+{effective_profile_summary(effective_profile)}
 
-Answer naturally and helpfully.
-Do not mention the profile unless the user directly asks about it.
-"""
+Instructions:
+- Answer naturally and helpfully.
+- Do not explicitly mention the inferred profile unless the user asks.
+- Keep the answer plausible as a normal chatbot reply.
+- The profile may be approximate and can contain errors.
+- If the user asks for something sensitive or high stakes, avoid making assumptions based on profile alone.
+""".strip()
+
+    messages = [{"role": "system", "content": system_prompt}]
+    if history_text:
+        messages.append({"role": "system", "content": f"Recent chat history:\n{history_text}"})
+    messages.append({"role": "user", "content": user_message})
 
     response = client.chat.completions.create(
-        model="openai/gpt-oss-20b",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message},
-        ],
+        model=MODEL_NAME,
+        messages=messages,
         temperature=0.7,
     )
 
