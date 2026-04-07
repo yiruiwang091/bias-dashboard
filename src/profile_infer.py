@@ -18,7 +18,11 @@ DISPLAY_NAMES = {
 }
 
 
-def _normalize_probs(raw_probs: Dict[str, float], labels: list[str]) -> Dict[str, float]:
+def _normalize_probs(raw_probs, labels: list[str]) -> Dict[str, float]:
+    if not isinstance(raw_probs, dict):
+        uniform = 1.0 / len(labels)
+        return {label: uniform for label in labels}
+
     clean: Dict[str, float] = {}
     for label in labels:
         value = raw_probs.get(label, 0.0)
@@ -126,20 +130,25 @@ Required JSON shape:
         )
         raw = response.choices[0].message.content
         data = json.loads(raw)
+
+        if not isinstance(data, dict):
+            return _fallback_profile(chat_history)
     except Exception:
         return _fallback_profile(chat_history)
 
-    state: Dict[str, Any] = {}
-    for attr, labels in ATTRIBUTE_SCHEMA.items():
-        probs = _normalize_probs(data.get(attr, {}), labels)
-        top_label = max(probs, key=probs.get)
-        confidence = probs[top_label]
-        state[attr] = {
-            "top_label": top_label if confidence >= threshold else "unknown",
-            "confidence": confidence,
-            "probs": probs,
-            "pinned": None,
-            "source": "llm_inference",
-        }
-
-    return state
+    try:
+        state: Dict[str, Any] = {}
+        for attr, labels in ATTRIBUTE_SCHEMA.items():
+            probs = _normalize_probs(data.get(attr, {}), labels)
+            top_label = max(probs, key=probs.get)
+            confidence = probs[top_label]
+            state[attr] = {
+                "top_label": top_label if confidence >= threshold else "unknown",
+                "confidence": confidence,
+                "probs": probs,
+                "pinned": None,
+                "source": "llm_inference",
+            }
+        return state
+    except Exception:
+        return _fallback_profile(chat_history)

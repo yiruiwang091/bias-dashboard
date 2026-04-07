@@ -3,6 +3,7 @@ import streamlit as st
 from control_logic import merge_profile_with_pins
 from llm import build_client, get_response, MODEL_NAME
 from profile_infer import infer_profile, ATTRIBUTE_SCHEMA, DISPLAY_NAMES
+from compare import get_profile_changes, compare_answers
 
 st.set_page_config(page_title="TalkTuner-style Dashboard Demo", layout="wide")
 
@@ -169,14 +170,66 @@ with right_col:
         st.rerun()
 
     if st.session_state.baseline_reply:
-        st.markdown("**Original answer**")
-        st.write(st.session_state.baseline_reply)
+        st.markdown("---")
+        st.subheader("Comparison")
 
-    if st.session_state.show_controlled_reply and st.session_state.controlled_reply:
-        st.markdown("**Regenerated answer after control**")
-        st.write(st.session_state.controlled_reply)
+        if st.session_state.show_controlled_reply and st.session_state.controlled_reply:
+            changes = get_profile_changes(st.session_state.profile_state)
+            stats = compare_answers(
+                st.session_state.baseline_reply,
+                st.session_state.controlled_reply,
+            )
 
-        if st.session_state.controlled_reply != st.session_state.baseline_reply:
-            st.success("Answer changed after profile control.")
+            st.markdown("**Profile changes applied**")
+            if changes:
+                for attr, before_label, after_label in changes:
+                    st.write(f"- {attr}: {before_label} → {after_label}")
+            else:
+                st.write("- No pinned change was applied.")
+
+            metric_col1, metric_col2, metric_col3 = st.columns(3)
+            with metric_col1:
+                st.metric(
+                    "Word count",
+                    stats["after_words"],
+                    delta=stats["word_diff"],
+                )
+            with metric_col2:
+                st.metric(
+                    "Sentence count",
+                    stats["after_sentences"],
+                    delta=stats["sentence_diff"],
+                )
+            with metric_col3:
+                st.metric(
+                    "Changed?",
+                    "Yes" if stats["changed"] else "No",
+                )
+
+            before_col, after_col = st.columns(2)
+
+            with before_col:
+                st.markdown("**Before control**")
+                st.write(st.session_state.baseline_reply)
+
+            with after_col:
+                st.markdown("**After control**")
+                st.write(st.session_state.controlled_reply)
+
+            st.markdown("**Quick summary**")
+            st.write(f"- {stats['length_note']}")
+            st.write(f"- {stats['sentence_note']}")
+
+            st.markdown("**Meaningful changes detected**")
+            for note in stats["semantic_notes"]:
+                st.write(f"- {note}")
+
+            if stats["changed"]:
+                st.success("Answer changed after profile control.")
+            else:
+                st.warning("The answer did not visibly change this time. Try a different question or stronger pin.")
+
         else:
-            st.warning("The answer did not visibly change this time. Try a different question or stronger pin.")
+            st.markdown("**Original answer**")
+            st.write(st.session_state.baseline_reply)
+            st.info("Pin one or more attributes and click 'Regenerate with pinned profile' to see the comparison view.")
