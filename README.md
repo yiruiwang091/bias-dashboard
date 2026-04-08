@@ -1,1 +1,6 @@
-Can run the app by `streamlit run app.py`
+Please run the app by the following commands:
+
+``` bash
+source ../.venv/bin/activate
+streamlit run app.py
+```
